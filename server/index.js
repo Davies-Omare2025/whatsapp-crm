@@ -4,6 +4,8 @@ const express = require("express");
 const cors = require("cors");
 
 const webhookRoutes = require("./routes/webhook");
+const leadRoutes = require("./routes/leads");
+const statsRoutes = require("./routes/stats");
 
 const app = express();
 
@@ -22,13 +24,8 @@ app.use(
 
 app.use("/webhook", webhookRoutes);
 
-// Placeholder routes for Days 3-4
-app.use("/api/leads", (_req, res) =>
-  res.status(501).json({ error: "Coming on Day 3" }),
-);
-app.use("/api/stats", (_req, res) =>
-  res.status(501).json({ error: "Coming on Day 3" }),
-);
+app.use("/api/leads", leadRoutes);
+app.use("/api/stats", statsRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

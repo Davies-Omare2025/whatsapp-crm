@@ -110,15 +110,15 @@ async function handleIncoming(message, contact) {
     case "awaiting_name": {
       if (!userText || !looksLikeName(userText)) {
         const reply =
-          "Hi! Welcome to Allenbridge CRM. What's your full name? (at least 2 characters)";
+          "Hi! Welcome to Mactaba Lab CRM. What's your full name? (at least 2 characters)";
         await sendText(waPhone, reply);
         logMessage(lead.id, "outbound", reply);
         return;
       }
       updateLead(lead.id, { name: userText });
-      setState(lead.id, "awaiting_email");
       const reply = `Thanks ${userText.split(" ")[0]}! What's your email address?`;
-      await sendText(waPhone, reply);
+      await sendText(waPhone, reply); // ← send first
+      setState(lead.id, "awaiting_email"); // ← advance after confirmed
       logMessage(lead.id, "outbound", reply);
       return;
     }
@@ -131,8 +131,8 @@ async function handleIncoming(message, contact) {
         return;
       }
       updateLead(lead.id, { email: userText });
-      setState(lead.id, "awaiting_inquiry_type");
-      await sendInquiryList(waPhone);
+      await sendInquiryList(waPhone); // ← send first
+      setState(lead.id, "awaiting_inquiry_type"); // ← advance after
       logMessage(lead.id, "outbound", "[interactive list: inquiry type]");
       return;
     }
@@ -143,7 +143,6 @@ async function handleIncoming(message, contact) {
       }
       const inquiry = listChoiceId || userText;
       updateLead(lead.id, { inquiry_type: inquiry });
-      setState(lead.id, "confirming");
 
       const fresh = db
         .prepare("SELECT name, email, inquiry_type FROM leads WHERE id = ?")
@@ -154,16 +153,17 @@ async function handleIncoming(message, contact) {
         `Email: ${fresh.email}\n` +
         `Inquiry: ${fresh.inquiry_type}\n\n` +
         `Reply "yes" to confirm or "restart" to start over.`;
-      await sendText(waPhone, reply);
+      await sendText(waPhone, reply); // ← send first
+      setState(lead.id, "confirming"); // ← advance after confirmed
       logMessage(lead.id, "outbound", reply);
       return;
     }
     case "confirming": {
       if (/^y(es)?$/i.test(userText || "")) {
-        setState(lead.id, "complete");
         const reply =
           "Thanks! Your details are saved. Someone from our team will be in touch shortly. To start a new inquiry, type 'restart'.";
         await sendText(waPhone, reply);
+        setState(lead.id, "complete"); // ← only one, after send
         logMessage(lead.id, "outbound", reply);
         return;
       }
