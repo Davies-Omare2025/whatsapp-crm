@@ -1,7 +1,7 @@
 // server/services/whatsapp.js
 const axios = require("axios");
 
-const GRAPH = "https://graph.facebook.com/v20.0";
+const GRAPH = "https://graph.facebook.com/v25.0";
 function authHeaders() {
   return {
     Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
