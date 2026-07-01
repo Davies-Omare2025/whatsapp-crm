@@ -1,58 +1,43 @@
 // server/services/bot.js
-const { v4: uuidv4 } = require("uuid");
-const db = require("../db");
+const leadsRepo = require("../repositories/leads.repo");
+const conversationsRepo = require("../repositories/conversations.repo");
+const messagesRepo = require("../repositories/messages.repo");
 const { sendText, sendInquiryList } = require("./whatsapp");
 
 // --- Persistence helpers --------------------------------------------------
 
-function findOrCreateLead(waPhone, profileName) {
-  let lead = db.prepare("SELECT * FROM leads WHERE wa_phone = ?").get(waPhone);
-
+async function findOrCreateLead(waPhone, profileName) {
+  let lead = await leadsRepo.findByPhone(waPhone);
   if (lead) return lead;
 
-  const id = uuidv4();
-  db.prepare(
-    `INSERT INTO leads (id, wa_phone, name, status)
-     VALUES (?, ?, ?, 'new')`,
-  ).run(id, waPhone, profileName || null);
+  lead = await leadsRepo.insert({
+    waPhone,
+    name: profileName || null,
+    email: null,
+    inquiryType: null,
+  });
 
-  db.prepare(
-    `INSERT INTO conversations (id, lead_id, state)
-     VALUES (?, ?, 'awaiting_name')`,
-  ).run(uuidv4(), id);
+  await conversationsRepo.create(lead.id, "awaiting_name");
 
-  return db.prepare("SELECT * FROM leads WHERE id = ?").get(id);
-}
-function getConversation(leadId) {
-  return db
-    .prepare("SELECT * FROM conversations WHERE lead_id = ?")
-    .get(leadId);
+  return lead;
 }
 
-function setState(leadId, state) {
-  db.prepare(
-    `UPDATE conversations
-     SET state = ?, last_message_at = datetime('now')
-     WHERE lead_id = ?`,
-  ).run(state, leadId);
+async function getConversation(leadId) {
+  return conversationsRepo.findByLeadId(leadId);
 }
 
-function updateLead(leadId, patch) {
-  const fields = Object.keys(patch);
-  if (fields.length === 0) return;
-  const sets = fields.map((f) => `${f} = ?`).join(", ");
-  const values = fields.map((f) => patch[f]);
-  db.prepare(
-    `UPDATE leads SET ${sets}, updated_at = datetime('now') WHERE id = ?`,
-  ).run(...values, leadId);
+async function setState(leadId, state) {
+  return conversationsRepo.setState(leadId, state);
 }
 
-function logMessage(leadId, direction, body, rawPayload) {
-  db.prepare(
-    `INSERT INTO messages (lead_id, direction, body, raw_payload)
-     VALUES (?, ?, ?, ?)`,
-  ).run(leadId, direction, body, JSON.stringify(rawPayload || null));
+async function updateLead(leadId, patch) {
+  return leadsRepo.updateFields(leadId, patch);
 }
+
+async function logMessage(leadId, direction, body, rawPayload) {
+  return messagesRepo.append(leadId, direction, body, rawPayload);
+}
+
 // --- Validation -------------------------------------------------------
 
 function looksLikeEmail(str) {
@@ -62,15 +47,15 @@ function looksLikeEmail(str) {
 function looksLikeName(str) {
   return typeof str === "string" && str.trim().length >= 2;
 }
+
 // --- Conversation handler -----------------------------------------------
 
 async function handleIncoming(message, contact) {
   const waPhone = message.from;
   const profileName = contact?.profile?.name;
 
-  const lead = findOrCreateLead(waPhone, profileName);
+  const lead = await findOrCreateLead(waPhone, profileName);
 
-  // Pull user-visible text out of whatever message type Meta sent
   let userText = null;
   let listChoiceId = null;
 
@@ -85,41 +70,39 @@ async function handleIncoming(message, contact) {
       userText = i.button_reply.title;
     }
   } else {
-    // voice note, image, sticker, location...
     await sendText(
       waPhone,
       "I can only read text messages right now. Could you type your answer?",
     );
-    logMessage(lead.id, "inbound", `[${message.type}]`, message);
+    await logMessage(lead.id, "in", `[${message.type}]`, message);
     return;
   }
-  logMessage(lead.id, "inbound", userText, message);
+  await logMessage(lead.id, "in", userText, message);
 
-  // Escape hatch: restart
   if (userText && /^(restart|start over|reset)$/i.test(userText)) {
-    setState(lead.id, "awaiting_name");
-    updateLead(lead.id, { name: null, email: null, inquiry_type: null });
+    await setState(lead.id, "awaiting_name");
+    await updateLead(lead.id, { name: null, email: null, inquiry_type: null });
     const reply = "No problem, let's start over. What's your full name?";
     await sendText(waPhone, reply);
-    logMessage(lead.id, "outbound", reply);
+    await logMessage(lead.id, "out", reply);
     return;
   }
 
-  const convo = getConversation(lead.id);
+  const convo = await getConversation(lead.id);
   switch (convo.state) {
     case "awaiting_name": {
       if (!userText || !looksLikeName(userText)) {
         const reply =
           "Hi! Welcome to Mactaba Lab CRM. What's your full name? (at least 2 characters)";
         await sendText(waPhone, reply);
-        logMessage(lead.id, "outbound", reply);
+        await logMessage(lead.id, "out", reply);
         return;
       }
-      updateLead(lead.id, { name: userText });
+      await updateLead(lead.id, { name: userText });
       const reply = `Thanks ${userText.split(" ")[0]}! What's your email address?`;
-      await sendText(waPhone, reply); // ← send first
-      setState(lead.id, "awaiting_email"); // ← advance after confirmed
-      logMessage(lead.id, "outbound", reply);
+      await sendText(waPhone, reply);
+      await setState(lead.id, "awaiting_email");
+      await logMessage(lead.id, "out", reply);
       return;
     }
     case "awaiting_email": {
@@ -127,13 +110,13 @@ async function handleIncoming(message, contact) {
         const reply =
           "Hmm, that doesn't look like an email. Could you send it again? Example: yourname@gmail.com";
         await sendText(waPhone, reply);
-        logMessage(lead.id, "outbound", reply);
+        await logMessage(lead.id, "out", reply);
         return;
       }
-      updateLead(lead.id, { email: userText });
-      await sendInquiryList(waPhone); // ← send first
-      setState(lead.id, "awaiting_inquiry_type"); // ← advance after
-      logMessage(lead.id, "outbound", "[interactive list: inquiry type]");
+      await updateLead(lead.id, { email: userText });
+      await sendInquiryList(waPhone);
+      await setState(lead.id, "awaiting_inquiry_type");
+      await logMessage(lead.id, "out", "[interactive list: inquiry type]");
       return;
     }
     case "awaiting_inquiry_type": {
@@ -142,20 +125,18 @@ async function handleIncoming(message, contact) {
         return;
       }
       const inquiry = listChoiceId || userText;
-      updateLead(lead.id, { inquiry_type: inquiry });
+      await updateLead(lead.id, { inquiry_type: inquiry });
 
-      const fresh = db
-        .prepare("SELECT name, email, inquiry_type FROM leads WHERE id = ?")
-        .get(lead.id);
+      const fresh = await leadsRepo.findById(lead.id);
       const reply =
         `Please confirm your details:\n\n` +
         `Name: ${fresh.name}\n` +
         `Email: ${fresh.email}\n` +
         `Inquiry: ${fresh.inquiry_type}\n\n` +
         `Reply "yes" to confirm or "restart" to start over.`;
-      await sendText(waPhone, reply); // ← send first
-      setState(lead.id, "confirming"); // ← advance after confirmed
-      logMessage(lead.id, "outbound", reply);
+      await sendText(waPhone, reply);
+      await setState(lead.id, "confirming");
+      await logMessage(lead.id, "out", reply);
       return;
     }
     case "confirming": {
@@ -163,14 +144,14 @@ async function handleIncoming(message, contact) {
         const reply =
           "Thanks! Your details are saved. Someone from our team will be in touch shortly. To start a new inquiry, type 'restart'.";
         await sendText(waPhone, reply);
-        setState(lead.id, "complete"); // ← only one, after send
-        logMessage(lead.id, "outbound", reply);
+        await setState(lead.id, "complete");
+        await logMessage(lead.id, "out", reply);
         return;
       }
       const reply =
         "Reply 'yes' to confirm the details above, or 'restart' to start over.";
       await sendText(waPhone, reply);
-      logMessage(lead.id, "outbound", reply);
+      await logMessage(lead.id, "out", reply);
       return;
     }
 
@@ -179,7 +160,7 @@ async function handleIncoming(message, contact) {
       const reply =
         "Thanks! We already have your details. A team member will be in touch. To start a new inquiry, type 'restart'.";
       await sendText(waPhone, reply);
-      logMessage(lead.id, "outbound", reply);
+      await logMessage(lead.id, "out", reply);
       return;
     }
   }

@@ -1,19 +1,19 @@
 // server/index.js
-require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const env = require("./config/env");
 
-const webhookRoutes = require("./routes/webhook");
-const leadRoutes = require("./routes/leads");
-const statsRoutes = require("./routes/stats");
+const webhookRoutes = require("./routes/webhook.routes");
+const leadsRoutes = require("./routes/leads.routes");
+const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
 
-// Middleware -- same as Week 10
-app.use(cors());
-// IMPORTANT: we need the raw request body later (Day 2) to verify Meta's
-// HMAC signature. express.json's `verify` callback runs before parsing
-// and lets us stash the raw bytes on req.rawBody.
+app.use(cors({ origin: process.env.APP_URL || "http://localhost:3000" }));
+
+// IMPORTANT: we still need the raw request body for Meta's HMAC signature
+// verification (same as Week 11). express.json's `verify` callback runs
+// before parsing and lets us stash the raw bytes on req.rawBody.
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -22,21 +22,13 @@ app.use(
   }),
 );
 
+app.get("/health", (req, res) => res.json({ ok: true }));
+
 app.use("/webhook", webhookRoutes);
+app.use("/api/leads", leadsRoutes);
 
-app.use("/api/leads", leadRoutes);
-app.use("/api/stats", statsRoutes);
+app.use(errorHandler);
 
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-app.use((err, _req, res, _next) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
-});
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`CRM server running on :${env.PORT}`);
 });
