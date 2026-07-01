@@ -29,6 +29,7 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 app.use("/webhook", webhookRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/leads", requireAuth, leadsRoutes);
+app.use("/api/users", requireAuth, require("./routes/users.routes"));
 
 app.use(errorHandler);
 
