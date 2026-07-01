@@ -6,6 +6,8 @@ const env = require("./config/env");
 const webhookRoutes = require("./routes/webhook.routes");
 const leadsRoutes = require("./routes/leads.routes");
 const errorHandler = require("./middleware/errorHandler");
+const authRoutes = require("./routes/auth.routes");
+const requireAuth = require("./middleware/requireAuth");
 
 const app = express();
 
@@ -25,7 +27,8 @@ app.use(
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.use("/webhook", webhookRoutes);
-app.use("/api/leads", leadsRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/leads", requireAuth, leadsRoutes);
 
 app.use(errorHandler);
 
