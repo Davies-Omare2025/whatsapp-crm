@@ -26,4 +26,19 @@ async function insert({ email, passwordHash, name, role = "agent" }) {
   return rows[0];
 }
 
-module.exports = { findByEmail, findById, insert };
+async function findLeastBusyAgent() {
+  const { rows } = await query(
+    `SELECT u.id, u.name, COUNT(l.id)::int AS active_leads
+     FROM users u
+     LEFT JOIN leads l
+       ON l.assigned_to = u.id
+       AND l.status NOT IN ('converted', 'lost')
+     WHERE u.role = 'agent'
+     GROUP BY u.id, u.name
+     ORDER BY active_leads ASC, u.created_at ASC
+     LIMIT 1`,
+  );
+  return rows[0] || null;
+}
+
+module.exports = { findByEmail, findById, insert, findLeastBusyAgent };

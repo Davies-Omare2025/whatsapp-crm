@@ -17,23 +17,35 @@ const STATUS_OPTIONS = [
 export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [assignedFilter, setAssignedFilter] = useState("");
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+  }
 
   const fetchLeads = useCallback(async () => {
     try {
       setError(null);
-      const data = await listLeads({ search, status });
+      const data = await listLeads({
+        search,
+        status,
+        assignedTo: assignedFilter,
+      });
       setLeads(data.leads);
     } catch (err) {
-      setError(err.response?.data?.error || err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [search, status]);
+  }, [search, status, assignedFilter]);
 
   useEffect(() => {
     fetchLeads();
@@ -47,16 +59,31 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Mctaba CRM</h1>
-          <p className="text-sm text-gray-500">
-            WhatsApp lead capture — Nairobi
-          </p>
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Mctaba CRM</h1>
+            <p className="text-sm text-gray-500">
+              WhatsApp lead capture — Nairobi
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600">
+              {currentUser?.name} ({currentUser?.role})
+            </span>
+            <button
+              onClick={handleLogout}
+              className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
-        <StatsCards refreshKey={refreshKey} />
+        {currentUser?.role === "admin" && (
+          <StatsCards refreshKey={refreshKey} />
+        )}
 
         <div className="flex flex-col md:flex-row gap-3">
           <input
@@ -76,6 +103,14 @@ export default function Dashboard() {
                 {opt.label}
               </option>
             ))}
+          </select>
+          <select
+            value={assignedFilter}
+            onChange={(e) => setAssignedFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+          >
+            <option value="">All leads</option>
+            <option value="unassigned">Unassigned only</option>
           </select>
         </div>
 

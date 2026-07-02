@@ -25,6 +25,7 @@ export default function LeadsTable({ leads, onSelect }) {
             <th className="px-4 py-3">Phone</th>
             <th className="px-4 py-3">Inquiry</th>
             <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Assigned to</th>
             <th className="px-4 py-3">Received</th>
           </tr>
         </thead>
@@ -38,7 +39,11 @@ export default function LeadsTable({ leads, onSelect }) {
               <td className="px-4 py-3 font-medium text-gray-900">
                 {lead.name || "(no name yet)"}
               </td>
-              <td className="px-4 py-3 text-gray-700">+{lead.wa_phone}</td>
+              <td className="px-4 py-3 text-gray-700">
+                {lead.wa_phone.startsWith("+")
+                  ? lead.wa_phone
+                  : "+" + lead.wa_phone}
+              </td>
               <td className="px-4 py-3 text-gray-700">
                 {lead.inquiry_type || "-"}
               </td>
@@ -52,10 +57,13 @@ export default function LeadsTable({ leads, onSelect }) {
                   {lead.status}
                 </span>
               </td>
+              <td className="px-4 py-3 text-gray-700">
+                {lead.assigned_to_name || (
+                  <span className="text-gray-400 italic">Unassigned</span>
+                )}
+              </td>
               <td className="px-4 py-3 text-gray-500">
-                {new Date(
-                  lead.created_at.replace(" ", "T") + "Z",
-                ).toLocaleString()}
+                {new Date(lead.created_at).toLocaleString()}
               </td>
             </tr>
           ))}

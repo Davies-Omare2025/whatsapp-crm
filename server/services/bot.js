@@ -2,6 +2,7 @@
 const leadsRepo = require("../repositories/leads.repo");
 const conversationsRepo = require("../repositories/conversations.repo");
 const messagesRepo = require("../repositories/messages.repo");
+const usersRepo = require("../repositories/users.repo");
 const { sendText, sendInquiryList } = require("./whatsapp");
 
 // --- Persistence helpers --------------------------------------------------
@@ -18,6 +19,22 @@ async function findOrCreateLead(waPhone, profileName) {
   });
 
   await conversationsRepo.create(lead.id, "awaiting_name");
+
+  // Auto-route: assign new lead to the least-busy agent (fallback: unassigned)
+  try {
+    const agent = await usersRepo.findLeastBusyAgent();
+    if (agent) {
+      const updated = await leadsRepo.assign(lead.id, agent.id);
+      if (updated) lead = updated;
+      console.log(`[auto-route] lead ${lead.id} -> ${agent.name}`);
+    } else {
+      console.log(
+        `[auto-route] no agents available, lead ${lead.id} left unassigned`,
+      );
+    }
+  } catch (err) {
+    console.error("[auto-route] failed, lead left unassigned:", err.message);
+  }
 
   return lead;
 }

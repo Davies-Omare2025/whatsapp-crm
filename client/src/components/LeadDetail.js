@@ -1,6 +1,6 @@
 // client/src/components/LeadDetail.js
 import { useEffect, useState } from "react";
-import { getLead, updateLead } from "../services/api";
+import { getLead, updateLead, listUsers, assignLead } from "../services/api";
 
 const STATUSES = ["new", "contacted", "qualified", "converted", "lost"];
 
@@ -8,6 +8,17 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
   const [lead, setLead] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [pendingAssignee, setPendingAssignee] = useState("");
+  const currentUser = JSON.parse(localStorage.getItem("user") || "null");
+  const isAdmin = currentUser?.role === "admin";
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    listUsers()
+      .then((data) => setUsers(data.users))
+      .catch(() => {});
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!leadId) return;
@@ -15,7 +26,11 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
     setLead(null);
     setError(null);
     getLead(leadId)
-      .then((data) => !cancelled && setLead(data))
+      .then((data) => {
+        if (cancelled) return;
+        setLead(data.lead);
+        setPendingAssignee(data.lead.assigned_to || "");
+      })
       .catch((err) => !cancelled && setError(err.message));
     return () => {
       cancelled = true;
@@ -36,10 +51,24 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
     setError(null);
     try {
       const updated = await updateLead(leadId, { status: newStatus });
-      setLead((prev) => ({ ...prev, ...updated }));
+      setLead((prev) => ({ ...prev, ...updated.lead }));
       onUpdated?.();
     } catch (err) {
-      setError(err.response?.data?.error || err.message);
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changeAssignee(userId) {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await assignLead(leadId, userId || null);
+      setLead((prev) => ({ ...prev, ...updated.lead }));
+      onUpdated?.();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -106,6 +135,36 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
               </div>
             </div>
 
+            {isAdmin && (
+              <div className="mt-4">
+                <div className="text-sm text-gray-500 mb-1">Assigned to</div>
+                <div className="flex gap-2">
+                  <select
+                    value={pendingAssignee}
+                    disabled={saving}
+                    onChange={(e) => setPendingAssignee(e.target.value)}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.role})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => changeAssignee(pendingAssignee)}
+                    disabled={
+                      saving || pendingAssignee === (lead.assigned_to || "")
+                    }
+                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg disabled:opacity-40"
+                  >
+                    {saving ? "Assigning..." : "Assign"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="mt-6">
               <a
                 href={"https://wa.me/" + lead.wa_phone}
@@ -122,7 +181,7 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
                 Conversation
               </h3>
               <div className="space-y-2">
-                {lead.messages.map((m) => (
+                {(lead.messages || []).map((m) => (
                   <div
                     key={m.id}
                     className={

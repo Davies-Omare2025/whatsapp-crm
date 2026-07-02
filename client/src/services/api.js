@@ -1,28 +1,41 @@
 // client/src/services/api.js
-import axios from "axios";
+import { api } from "../lib/api";
 
-const http = axios.create({
-  baseURL: "http://localhost:5000/api",
-});
-
-export async function listLeads({ search = "", status = "", page = 1 } = {}) {
-  const { data } = await http.get("/leads", {
-    params: { search, status, page, pageSize: 25 },
-  });
-  return data;
+export async function listLeads({
+  search = "",
+  status = "",
+  assignedTo = "",
+} = {}) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (status) params.set("status", status);
+  if (assignedTo) params.set("assignedTo", assignedTo);
+  const qs = params.toString();
+  return api(`/leads${qs ? `?${qs}` : ""}`);
 }
 
 export async function getLead(id) {
-  const { data } = await http.get(`/leads/${id}`);
-  return data;
+  return api(`/leads/${id}`);
 }
 
 export async function updateLead(id, patch) {
-  const { data } = await http.patch(`/leads/${id}`, patch);
-  return data;
+  return api(`/leads/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 }
 
 export async function getStats() {
-  const { data } = await http.get("/stats");
-  return data;
+  return api("/leads/stats");
+}
+
+export async function listUsers() {
+  return api("/users");
+}
+
+export async function assignLead(id, userId) {
+  return api(`/leads/${id}/assign`, {
+    method: "PATCH",
+    body: JSON.stringify({ assignedTo: userId }),
+  });
 }

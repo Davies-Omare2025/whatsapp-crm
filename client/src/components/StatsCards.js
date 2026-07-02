@@ -21,11 +21,16 @@ export default function StatsCards({ refreshKey }) {
   if (!stats)
     return <div className="text-gray-500 text-sm">Loading stats...</div>;
 
+  const byStatus = {};
+  for (const row of stats.byStatus) {
+    byStatus[row.status] = row.total;
+  }
+
   const cards = [
     { label: "Total leads", value: stats.total },
-    { label: "New today", value: stats.today },
-    { label: "Qualified", value: stats.byStatus.qualified },
-    { label: "Converted", value: stats.byStatus.converted },
+    { label: "New", value: byStatus.new || 0 },
+    { label: "Qualified", value: byStatus.qualified || 0 },
+    { label: "Converted", value: byStatus.converted || 0 },
   ];
 
   return (
