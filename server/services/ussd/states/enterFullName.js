@@ -1,4 +1,5 @@
 const { saveSession } = require("../../redis.service");
+const { STATES } = require("../constants");
 
 module.exports = async function handleEnterFullName({
   sessionId,
@@ -16,7 +17,7 @@ Enter your full name`;
 
   // Remember the name and move to the ID-number state.
   await saveSession(sessionId, {
-    state: "enter_id_number",
+    state: STATES.ENTER_ID_NUMBER,
     context: {
       ...context,
       fullName,
