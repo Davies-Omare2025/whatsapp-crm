@@ -37,7 +37,15 @@ export default function LeadsTable({ leads, onSelect }) {
               onClick={() => onSelect(lead)}
             >
               <td className="px-4 py-3 font-medium text-gray-900">
-                {lead.name || "(no name yet)"}
+                <div className="flex items-center gap-2">
+                  {lead.unread_count > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-xs font-bold">
+                      {lead.unread_count}
+                    </span>
+                  )}
+
+                  <span>{lead.name || "(no name yet)"}</span>
+                </div>
               </td>
               <td className="px-4 py-3 text-gray-700">
                 {lead.wa_phone.startsWith("+")

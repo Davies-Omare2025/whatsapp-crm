@@ -39,3 +39,23 @@ export async function assignLead(id, userId) {
     body: JSON.stringify({ assignedTo: userId }),
   });
 }
+
+export async function getMessages(leadId) {
+  return api(`/messages/${leadId}`);
+}
+
+export async function sendMessage(leadId, body) {
+  return api("/messages/send", {
+    method: "POST",
+    body: JSON.stringify({
+      leadId,
+      body,
+    }),
+  });
+}
+
+export async function markLeadAsRead(id) {
+  return api(`/leads/${id}/read`, {
+    method: "PATCH",
+  });
+}

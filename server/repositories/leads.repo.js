@@ -109,6 +109,55 @@ async function statsByStatus() {
   return rows;
 }
 
+async function setBotEnabled(id, enabled) {
+  const { rows } = await query(
+    `
+    UPDATE leads
+    SET bot_enabled = $2,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING *;
+    `,
+    [id, enabled],
+  );
+
+  return rows[0] || null;
+}
+
+async function incrementUnreadCount(id) {
+  console.log("incrementUnreadCount() called with:", id);
+
+  const { rows } = await query(
+    `
+    UPDATE leads
+    SET unread_count = unread_count + 1,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id, name, unread_count;
+    `,
+    [id],
+  );
+
+  console.log("Updated lead:", rows[0]);
+
+  return rows[0] || null;
+}
+
+async function resetUnreadCount(id) {
+  const { rows } = await query(
+    `
+    UPDATE leads
+    SET unread_count = 0,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING *;
+    `,
+    [id],
+  );
+
+  return rows[0] || null;
+}
+
 module.exports = {
   findById,
   findByPhone,
@@ -118,4 +167,7 @@ module.exports = {
   updateFields,
   assign,
   statsByStatus,
+  setBotEnabled,
+  incrementUnreadCount,
+  resetUnreadCount,
 };

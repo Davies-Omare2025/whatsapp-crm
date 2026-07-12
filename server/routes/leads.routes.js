@@ -17,4 +17,6 @@ router.patch(
   asyncHandler(controller.reassign),
 );
 
+router.patch("/:id/read", asyncHandler(controller.markAsRead));
+
 module.exports = router;

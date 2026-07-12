@@ -1,6 +1,15 @@
 // client/src/components/LeadDetail.js
 import { useEffect, useState } from "react";
-import { getLead, updateLead, listUsers, assignLead } from "../services/api";
+import socket from "../lib/socket";
+import {
+  getLead,
+  updateLead,
+  listUsers,
+  assignLead,
+  getMessages,
+  sendMessage,
+  markLeadAsRead,
+} from "../services/api";
 
 const STATUSES = ["new", "contacted", "qualified", "converted", "lost"];
 
@@ -9,43 +18,130 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [users, setUsers] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
   const [pendingAssignee, setPendingAssignee] = useState("");
   const currentUser = JSON.parse(localStorage.getItem("user") || "null");
   const isAdmin = currentUser?.role === "admin";
 
   useEffect(() => {
-    if (!isAdmin) return;
-    listUsers()
-      .then((data) => setUsers(data.users))
-      .catch(() => {});
-  }, [isAdmin]);
-
-  useEffect(() => {
     if (!leadId) return;
+
     let cancelled = false;
-    setLead(null);
-    setError(null);
-    getLead(leadId)
-      .then((data) => {
+
+    async function loadLead() {
+      try {
+        setLead(null);
+        setError(null);
+
+        const data = await getLead(leadId);
+
         if (cancelled) return;
+
         setLead(data.lead);
         setPendingAssignee(data.lead.assigned_to || "");
-      })
-      .catch((err) => !cancelled && setError(err.message));
+
+        if (data.lead.unread_count > 0) {
+          await markLeadAsRead(leadId);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message);
+        }
+      }
+    }
+
+    loadLead();
+
     return () => {
       cancelled = true;
+    };
+  }, [leadId, onUpdated]);
+  useEffect(() => {
+    function handleNewMessage({ leadId: incomingLeadId, message }) {
+      if (incomingLeadId !== leadId) return;
+
+      setMessages((prev) => {
+        // Prevent duplicates
+        if (prev.some((m) => m.id === message.id)) {
+          return prev;
+        }
+
+        // Newest message first
+        return [message, ...prev];
+      });
+    }
+
+    socket.on("message:new", handleNewMessage);
+
+    return () => {
+      socket.off("message:new", handleNewMessage);
     };
   }, [leadId]);
 
   useEffect(() => {
-    if (!leadId) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose?.();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [leadId, onClose]);
+    const onMessage = ({ leadId: incomingLeadId, message }) => {
+      if (incomingLeadId !== leadId) return;
 
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) {
+          return prev;
+        }
+
+        return [message, ...prev];
+      });
+    };
+
+    socket.on("message:new", onMessage);
+
+    return () => {
+      socket.off("message:new", onMessage);
+    };
+  }, [leadId]);
+
+  useEffect(() => {
+    socket.on("connect", () => {
+      console.log("Connected to Socket.IO:", socket.id);
+    });
+
+    return () => {
+      socket.off("connect");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!leadId) return;
+
+    const loadMessages = async () => {
+      try {
+        const data = await getMessages(leadId);
+
+        console.log("Messages from backend:", data);
+
+        setMessages(data);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    loadMessages();
+  }, [leadId]);
+
+  useEffect(() => {
+    if (!leadId) return;
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [leadId, onClose]);
   async function changeStatus(newStatus) {
     setSaving(true);
     setError(null);
@@ -74,6 +170,22 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
     }
   }
 
+  async function handleSendMessage() {
+    if (!newMessage.trim()) return;
+
+    setError(null);
+
+    try {
+      await sendMessage(leadId, newMessage);
+
+      setNewMessage("");
+
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    }
+  }
   if (!leadId) return null;
 
   return (
@@ -92,7 +204,11 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
           </button>
         </div>
 
-        {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+        {error && (
+          <div className="mt-3 text-sm text-red-600">
+            Error: {String(error)}
+          </div>
+        )}
 
         {lead && (
           <div>
@@ -165,15 +281,28 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
               </div>
             )}
 
-            <div className="mt-6">
-              <a
-                href={"https://wa.me/" + lead.wa_phone}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700"
-              >
-                Reply via WhatsApp
-              </a>
+            <div className="mt-6 border-t pt-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Type your message..."
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSendMessage();
+                    }
+                  }}
+                />
+
+                <button
+                  onClick={handleSendMessage}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Send
+                </button>
+              </div>
             </div>
 
             <div className="mt-8">
@@ -181,12 +310,16 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
                 Conversation
               </h3>
               <div className="space-y-2">
-                {(lead.messages || []).map((m) => (
+                <div style={{ color: "red", fontWeight: "bold" }}>
+                  Total messages: {messages.length}
+                </div>
+
+                {[...messages].reverse().map((m) => (
                   <div
                     key={m.id}
                     className={
                       "rounded-lg px-3 py-2 text-sm max-w-[85%] " +
-                      (m.direction === "inbound"
+                      (m.direction === "in"
                         ? "bg-gray-100 text-gray-900"
                         : "bg-blue-600 text-white ml-auto")
                     }
@@ -195,7 +328,7 @@ export default function LeadDetail({ leadId, onClose, onUpdated }) {
                     <div
                       className={
                         "text-[10px] mt-1 " +
-                        (m.direction === "inbound"
+                        (m.direction === "in"
                           ? "text-gray-500"
                           : "text-blue-100")
                       }

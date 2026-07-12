@@ -1,21 +1,45 @@
 // server/index.js
-const express = require("express");
-const cors = require("cors");
-const env = require("./config/env");
 
+const express = require("express");
+const http = require("http");
+const cors = require("cors");
+const { Server } = require("socket.io");
+const env = require("./config/env");
+const { client, connectRedis } = require("./config/redis");
+const ussdRoutes = require("./routes/ussd.routes");
 const webhookRoutes = require("./routes/webhook.routes");
-const leadsRoutes = require("./routes/leads.routes");
-const errorHandler = require("./middleware/errorHandler");
 const authRoutes = require("./routes/auth.routes");
+const leadsRoutes = require("./routes/leads.routes");
+const messagesRoutes = require("./routes/messages.routes"); // NEW
 const requireAuth = require("./middleware/requireAuth");
+const errorHandler = require("./middleware/errorHandler");
+const { saveSession, getSession } = require("./services/redis.service");
 
 const app = express();
+const server = http.createServer(app);
 
-app.use(cors({ origin: process.env.APP_URL || "http://localhost:3000" }));
+const io = new Server(server, {
+  cors: {
+    origin: process.env.APP_URL || "http://localhost:3000",
+    methods: ["GET", "POST"],
+  },
+});
+global.io = io;
+io.on("connection", (socket) => {
+  console.log("Browser connected:", socket.id);
 
-// IMPORTANT: we still need the raw request body for Meta's HMAC signature
-// verification (same as Week 11). express.json's `verify` callback runs
-// before parsing and lets us stash the raw bytes on req.rawBody.
+  socket.on("disconnect", () => {
+    console.log("Browser disconnected:", socket.id);
+  });
+});
+
+app.use(
+  cors({
+    origin: process.env.APP_URL || "http://localhost:3000",
+  }),
+);
+
+// Keep raw body for Meta webhook signature verification
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -24,15 +48,64 @@ app.use(
   }),
 );
 
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
 
 app.use("/webhook", webhookRoutes);
+
 app.use("/api/auth", authRoutes);
+app.use("/", ussdRoutes);
+
+/*
+|--------------------------------------------------------------------------
+| Protected Routes
+|--------------------------------------------------------------------------
+*/
+
 app.use("/api/leads", requireAuth, leadsRoutes);
+
 app.use("/api/users", requireAuth, require("./routes/users.routes"));
+
+app.use("/api/messages", messagesRoutes); // NEW
+
+/*
+|--------------------------------------------------------------------------
+| Error Handler
+|--------------------------------------------------------------------------
+*/
 
 app.use(errorHandler);
 
-app.listen(env.PORT, () => {
-  console.log(`CRM server running on :${env.PORT}`);
+async function startServer() {
+  await connectRedis();
+
+  const redisServerInfo = await client.info("server");
+  console.log("Redis server information:\n", redisServerInfo);
+
+  await saveSession("test-session", {
+    state: "welcome",
+    context: {
+      name: "Redis Test",
+    },
+  });
+
+  const savedSession = await getSession("test-session");
+
+  console.log("Redis session test:", savedSession);
+
+  server.listen(env.PORT, () => {
+    console.log(`CRM server running on :${env.PORT}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });

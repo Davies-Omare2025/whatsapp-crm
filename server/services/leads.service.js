@@ -71,6 +71,13 @@ async function changeStatus(user, id, nextStatus) {
   return leadsRepo.updateStatus(id, nextStatus);
 }
 
+async function markAsRead(user, id) {
+  // Reuse the existing permission check.
+  await getLeadForUser(user, id);
+
+  return leadsRepo.resetUnreadCount(id);
+}
+
 async function getStats(user) {
   if (user.role !== "admin") {
     throw new AppError("Admins only", 403);
@@ -86,5 +93,6 @@ module.exports = {
   claimLead,
   reassignLead,
   changeStatus,
+  markAsRead,
   getStats,
 };

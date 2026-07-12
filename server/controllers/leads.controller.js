@@ -45,4 +45,17 @@ async function stats(req, res) {
   res.json(data);
 }
 
-module.exports = { list, getOne, patchStatus, claim, reassign, stats };
+async function markAsRead(req, res) {
+  const lead = await leadsService.markAsRead(req.user, req.params.id);
+  res.json({ lead });
+}
+
+module.exports = {
+  list,
+  getOne,
+  patchStatus,
+  claim,
+  reassign,
+  stats,
+  markAsRead,
+};

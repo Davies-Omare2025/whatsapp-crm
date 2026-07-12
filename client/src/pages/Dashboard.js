@@ -4,6 +4,7 @@ import { listLeads } from "../services/api";
 import StatsCards from "../components/StatsCards";
 import LeadsTable from "../components/LeadsTable";
 import LeadDetail from "../components/LeadDetail";
+import socket from "../lib/socket";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -54,6 +55,19 @@ export default function Dashboard() {
   useEffect(() => {
     const id = setInterval(() => setRefreshKey((k) => k + 1), 10000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    function handleNewMessage() {
+      console.log("New message received. Refreshing leads...");
+      setRefreshKey((k) => k + 1);
+    }
+
+    socket.on("message:new", handleNewMessage);
+
+    return () => {
+      socket.off("message:new", handleNewMessage);
+    };
   }, []);
 
   return (

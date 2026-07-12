@@ -1,7 +1,7 @@
-// server/services/whatsapp.js
 const axios = require("axios");
 
 const GRAPH = "https://graph.facebook.com/v25.0";
+
 function authHeaders() {
   return {
     Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
@@ -11,24 +11,50 @@ function authHeaders() {
 
 async function sendText(to, body) {
   const url = `${GRAPH}/${process.env.META_PHONE_NUMBER_ID}/messages`;
+
+  console.log("1. URL:", url);
+  console.log("2. Recipient:", to);
+  console.log("3. About to call Meta...");
+
   try {
-    await axios.post(
+    const response = await axios.post(
       url,
       {
         messaging_product: "whatsapp",
         to,
         type: "text",
-        text: { body },
+        text: {
+          body,
+        },
       },
-      { headers: authHeaders() },
+      {
+        headers: authHeaders(),
+        timeout: 15000,
+      },
     );
+
+    console.log("4. Meta accepted the message!");
+    console.log(response.data);
+
+    return response.data;
   } catch (err) {
-    console.error("sendText failed:", err.response?.data || err.message);
+    console.log("========== META RESPONSE ==========");
+    console.log("Status:", err.response?.status);
+
+    if (err.response?.data) {
+      console.dir(err.response.data, { depth: null });
+    }
+
+    console.log("Message:", err.message);
+    console.log("===================================");
+
     throw err;
   }
 }
+
 async function sendInquiryList(to) {
   const url = `${GRAPH}/${process.env.META_PHONE_NUMBER_ID}/messages`;
+
   try {
     await axios.post(
       url,
@@ -38,7 +64,9 @@ async function sendInquiryList(to) {
         type: "interactive",
         interactive: {
           type: "list",
-          body: { text: "What are you interested in?" },
+          body: {
+            text: "What are you interested in?",
+          },
           action: {
             button: "Choose one",
             sections: [
@@ -56,11 +84,20 @@ async function sendInquiryList(to) {
           },
         },
       },
-      { headers: authHeaders() },
+      {
+        headers: authHeaders(),
+      },
     );
   } catch (err) {
-    console.error("sendInquiryList failed:", err.response?.data || err.message);
+    console.error(
+      "sendInquiryList failed:",
+      JSON.stringify(err.response?.data, null, 2),
+    );
     throw err;
   }
 }
-module.exports = { sendText, sendInquiryList };
+
+module.exports = {
+  sendText,
+  sendInquiryList,
+};
