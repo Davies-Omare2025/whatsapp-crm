@@ -17,6 +17,9 @@ CREATE TABLE leads (
   name TEXT NOT NULL,
   email TEXT,
   inquiry_type TEXT,
+  channel TEXT NOT NULL DEFAULT 'whatsapp'
+    CHECK (channel IN ('whatsapp', 'ussd', 'web')),
+  category TEXT,
   status TEXT NOT NULL DEFAULT 'new'
     CHECK (status IN ('new', 'contacted', 'qualified', 'converted', 'lost')),
   notes TEXT,
@@ -26,8 +29,36 @@ CREATE TABLE leads (
 );
 
 CREATE INDEX idx_leads_status ON leads(status);
+CREATE INDEX idx_leads_channel ON leads(channel);
 CREATE INDEX idx_leads_created_at ON leads(created_at DESC);
 CREATE INDEX idx_leads_assigned_to ON leads(assigned_to);
+
+CREATE TABLE tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  lead_id UUID NOT NULL
+    REFERENCES leads(id)
+    ON DELETE CASCADE,
+
+  category TEXT NOT NULL,
+
+  message TEXT NOT NULL,
+
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+
+  channel TEXT NOT NULL DEFAULT 'ussd'
+    CHECK (channel IN ('ussd', 'whatsapp', 'web')),
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_tickets_lead_id ON tickets(lead_id);
+CREATE INDEX idx_tickets_status ON tickets(status);
+CREATE INDEX idx_tickets_channel ON tickets(channel);
+CREATE INDEX idx_tickets_created_at ON tickets(created_at DESC);
 
 CREATE TABLE conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

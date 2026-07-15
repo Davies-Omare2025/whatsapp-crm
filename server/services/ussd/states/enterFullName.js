@@ -1,28 +1,29 @@
 const { saveSession } = require("../../redis.service");
 const { STATES } = require("../constants");
+const { t } = require("../i18n");
 
 module.exports = async function handleEnterFullName({
   sessionId,
   latestInput,
   context,
+  lang,
 }) {
   const fullName = latestInput.trim();
 
-  // Do not accept an empty name.
-  if (fullName === "") {
-    return `CON Full name cannot be empty.
-
-Enter your full name`;
+  // The customer must enter a name before continuing.
+  if (!fullName) {
+    return `CON ${t(lang, "enter_full_name")}`;
   }
 
-  // Remember the name and move to the ID-number state.
+  // Save the name temporarily and move to the ID-number screen.
   await saveSession(sessionId, {
     state: STATES.ENTER_ID_NUMBER,
     context: {
       ...context,
       fullName,
+      lang,
     },
   });
 
-  return `CON Enter your ID Number`;
+  return `CON ${t(lang, "enter_id_number")}`;
 };

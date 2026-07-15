@@ -1,4 +1,5 @@
 const { client } = require("../config/redis");
+const { STATES } = require("./ussd/constants");
 
 const SESSION_TTL = 300; // 5 minutes
 
@@ -11,7 +12,7 @@ async function getSession(sessionId) {
 
   if (!raw) {
     return {
-      state: "welcome",
+      state: STATES.CHOOSE_LANGUAGE,
       context: {},
     };
   }

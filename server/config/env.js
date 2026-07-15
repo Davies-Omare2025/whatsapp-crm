@@ -9,6 +9,10 @@ const required = [
   "DB_NAME",
   "META_VERIFY_TOKEN",
   "JWT_SECRET",
+
+  // Africa's Talking
+  "AT_USERNAME",
+  "AT_API_KEY",
 ];
 
 for (const key of required) {
@@ -25,6 +29,7 @@ module.exports = {
   DB_USER: process.env.DB_USER,
   DB_PASSWORD: process.env.DB_PASSWORD,
   DB_NAME: process.env.DB_NAME,
+
   META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN,
   META_ACCESS_TOKEN: process.env.META_ACCESS_TOKEN,
   META_PHONE_NUMBER_ID: process.env.META_PHONE_NUMBER_ID,
@@ -32,4 +37,9 @@ module.exports = {
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "1h",
   BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
+
+  // Africa's Talking
+  AT_USERNAME: process.env.AT_USERNAME,
+  AT_API_KEY: process.env.AT_API_KEY,
+  AT_SMS_FROM: process.env.AT_SMS_FROM || "",
 };

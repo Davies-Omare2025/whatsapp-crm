@@ -52,13 +52,23 @@ async function list({ status, search, assignedTo, limit = 50, offset = 0 }) {
   return rows;
 }
 
-async function insert({ waPhone, name, email, inquiryType }) {
+async function insert({
+  waPhone,
+  name,
+  email,
+  inquiryType,
+  channel = "whatsapp",
+  category = null,
+}) {
   const { rows } = await query(
-    `INSERT INTO leads (wa_phone, name, email, inquiry_type)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO leads
+      (wa_phone, name, email, inquiry_type, channel, category)
+     VALUES
+      ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [waPhone, name, email, inquiryType],
+    [waPhone, name, email, inquiryType, channel, category],
   );
+
   return rows[0];
 }
 
